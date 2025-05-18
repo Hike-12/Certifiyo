@@ -21,7 +21,6 @@ const Itinerary = () => {
   const [loading, setLoading] = useState(false);
   const [itinerary, setItinerary] = useState(null);
   const [error, setError] = useState(null);
-  const [currentTab, setCurrentTab] = useState('details'); // 'details', 'map', 'itinerary', 'currency', 'weather'
   const [weatherInfo, setWeatherInfo] = useState(null);
   const [currency, setCurrency] = useState(null);
   const [hasGeneratedItinerary, setHasGeneratedItinerary] = useState(false);
@@ -59,57 +58,71 @@ const Itinerary = () => {
   // Scroll to map section
   const scrollToMap = () => {
     mapSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
-    setCurrentTab('map');
   };
 
   // Scroll to itinerary section
   const scrollToItinerary = () => {
     itineraryRef.current?.scrollIntoView({ behavior: 'smooth' });
-    setCurrentTab('itinerary');
   };
 
-  // Initialize map when map container is available
+  // Modify your map initialization useEffect
   useEffect(() => {
-    if (mapContainer.current && !mapRef.current && source && destination) {
-      console.log("Initializing map");
-      // Create map with a more modern tile layer
-      mapRef.current = L.map(mapContainer.current).setView([20, 0], 2);
+    // Only try to initialize when we have source, destination, the container is available, and we've generated an itinerary
+    if (mapContainer.current && source && destination && hasGeneratedItinerary) {
+      console.log("Initializing or updating map");
 
-      // Use a dark theme map style for better contrast with our color scheme
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 19
-      }).addTo(mapRef.current);
+      // Give the DOM a moment to fully render before initializing map
+      const initMapTimeout = setTimeout(() => {
+        // If the map doesn't exist yet, create it
+        if (!mapRef.current) {
+          console.log("Creating new map instance");
+          mapRef.current = L.map(mapContainer.current).setView([20, 0], 2);
 
-      // Create custom plane icon
-      const planeIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/1342/1342659.png',
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
-      });
+          // Use a dark theme map style
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+          }).addTo(mapRef.current);
 
-      // Add invisible plane marker (will be shown during animation)
-      planeMarkerRef.current = L.marker([0, 0], {
-        icon: planeIcon,
-        rotationAngle: 0,
-        rotationOrigin: 'center center'
-      });
+          // Create custom plane icon
+          const planeIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/1342/1342659.png',
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
 
-      // Once map is created, update it with source and destination
-      updateMap(source, destination);
+          // Add invisible plane marker (will be shown during animation)
+          planeMarkerRef.current = L.marker([0, 0], {
+            icon: planeIcon,
+            rotationAngle: 0,
+            rotationOrigin: 'center center'
+          });
+        } else {
+          // If map already exists, make sure it's properly sized for its container
+          console.log("Map already exists, invalidating size");
+          mapRef.current.invalidateSize(true);
+        }
+
+        // Always update map with current source and destination
+        updateMap(source, destination);
+      }, 100); // Short delay to ensure container is ready
+
+      return () => clearTimeout(initMapTimeout);
     }
   }, [mapContainer.current, source, destination, hasGeneratedItinerary]);
 
-  // Cleanup function for map
   useEffect(() => {
+    // Clean up the map when component unmounts
     return () => {
+      console.log("Component unmounting, cleaning up map");
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
       if (animationRef.current) {
         clearInterval(animationRef.current);
+        animationRef.current = null;
       }
     };
   }, []);
@@ -506,9 +519,6 @@ const Itinerary = () => {
       setItinerary(generatedItinerary);
       setHasGeneratedItinerary(true);
 
-      // Switch to map tab
-      setCurrentTab('map');
-
     } catch (err) {
       console.error('Error:', err);
       setError('Failed to generate itinerary. Please check your inputs and try again.');
@@ -741,696 +751,626 @@ const Itinerary = () => {
           className="rounded-2xl shadow-xl overflow-hidden mb-8"
           style={{ backgroundColor: '#111111', borderColor: '#9cadce', borderWidth: '1px' }}
         >
-          {/* Tab Navigation */}
-          <div className="flex overflow-x-auto border-b" style={{ borderColor: '#9cadce' }}>
-            <motion.button
-              whileHover={{ backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
-              className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm sm:text-base ${
-                currentTab === 'details'
-                  ? 'border-[#9cadce] text-[#9cadce]'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-              onClick={() => setCurrentTab('details')}
-            >
-              Trip Details
-            </motion.button>
-            <motion.button
-              whileHover={{ backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
-              className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm sm:text-base ${
-                currentTab === 'map'
-                  ? 'border-[#9cadce] text-[#9cadce]'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-              onClick={() => setCurrentTab('map')}
-              disabled={!hasGeneratedItinerary}
-            >
-              Map View
-            </motion.button>
-            <motion.button
-              whileHover={{ backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
-              className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm sm:text-base ${
-                currentTab === 'itinerary'
-                  ? 'border-[#9cadce] text-[#9cadce]'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-              onClick={() => setCurrentTab('itinerary')}
-              disabled={!itinerary}
-            >
-              Itinerary
-            </motion.button>
-            <button
-              className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm sm:text-base ${
-                currentTab === 'weather'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-              onClick={() => setCurrentTab('weather')}
-              disabled={!source || !destination}
-            >
-              <FaCloudSun className="inline-block mr-1" /> Weather
-            </button>
-            <motion.button
-              whileHover={{ backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
-              className={`flex-1 py-4 px-6 text-center border-b-2 font-medium text-sm sm:text-base ${
-                currentTab === 'currency'
-                  ? 'border-[#9cadce] text-[#9cadce]'
-                  : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-              onClick={() => setCurrentTab('currency')}
-              disabled={!source || !destination}
-            >
-              <FaExchangeAlt className="inline-block mr-1" /> Currency
-            </motion.button>
-          </div>
-
-          {/* Tab Content */}
           <div className="p-6">
-            {/* Trip Details Tab */}
-            {currentTab === 'details' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Trip Form */}
-                <div>
-                  <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Plan Your Adventure</h2>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="source" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
-                          Starting From
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FaMapMarkerAlt style={{ color: '#9cadce' }} />
-                          </div>
-                          <input
-                            type="text"
-                            id="source"
-                            value={source}
-                            onChange={(e) => setSource(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
-                            style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                            placeholder="New York, Tokyo..."
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label htmlFor="destination" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
-                          Destination
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FaMapMarkerAlt style={{ color: '#9cadce' }} />
-                          </div>
-                          <input
-                            type="text"
-                            id="destination"
-                            value={destination}
-                            onChange={(e) => setDestination(e.target.value)}
-                            className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
-                            style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                            placeholder="Paris, Bangkok..."
-                            required
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="days" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
-                          Trip Duration (Days)
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FaCalendarAlt style={{ color: '#9cadce' }} />
-                          </div>
-                          <input
-                            type="number"
-                            id="days"
-                            min="1"
-                            max="30"
-                            value={days}
-                            onChange={(e) => setDays(parseInt(e.target.value))}
-                            className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
-                            style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label htmlFor="travelers" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
-                          Number of Travelers
-                        </label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <FaUser style={{ color: '#9cadce' }} />
-                          </div>
-                          <input
-                            type="number"
-                            id="travelers"
-                            min="1"
-                            max="20"
-                            value={travelers}
-                            onChange={(e) => setTravelers(parseInt(e.target.value))}
-                            className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
-                            style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2" style={{ color: '#9cadce' }}>Budget Level</label>
-                      <div className="grid grid-cols-3 gap-3">
-                        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
-                          <input
-                            type="radio"
-                            id="budget-low"
-                            name="budget"
-                            className="sr-only"
-                            checked={budget === 'low'}
-                            onChange={() => setBudget('low')}
-                          />
-                          <label
-                            htmlFor="budget-low"
-                            className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
-                              budget === 'low'
-                                ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
-                                : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
-                            }`}
-                          >
-                            <span className="block text-sm font-medium">Economy</span>
-                            <span className="block text-xs mt-1">$ Budget-friendly</span>
-                          </label>
-                        </motion.div>
-
-                        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
-                          <input
-                            type="radio"
-                            id="budget-medium"
-                            name="budget"
-                            className="sr-only"
-                            checked={budget === 'medium'}
-                            onChange={() => setBudget('medium')}
-                          />
-                          <label
-                            htmlFor="budget-medium"
-                            className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
-                              budget === 'medium'
-                              ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
-                                : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
-                            }`}
-                          >
-                            <span className="block text-sm font-medium">Standard</span>
-                            <span className="block text-xs mt-1">$$ Mid-range</span>
-                          </label>
-                        </motion.div>
-
-                        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
-                          <input
-                            type="radio"
-                            id="budget-high"
-                            name="budget"
-                            className="sr-only"
-                            checked={budget === 'high'}
-                            onChange={() => setBudget('high')}
-                          />
-                          <label
-                            htmlFor="budget-high"
-                            className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
-                              budget === 'high'
-                                ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
-                                : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
-                            }`}
-                          >
-                            <span className="block text-sm font-medium">Luxury</span>
-                            <span className="block text-xs mt-1">$$$ Premium</span>
-                          </label>
-                        </motion.div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-2" style={{ color: '#9cadce' }}>Travel Interests</label>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {interestOptions.map((option) => (
-                          <motion.div key={option.value} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
-                            <input
-                              type="checkbox"
-                              id={`interest-${option.value}`}
-                              className="sr-only"
-                              checked={interests.includes(option.value)}
-                              onChange={() => toggleInterest(option.value)}
-                            />
-                            <label
-                              htmlFor={`interest-${option.value}`}
-                              className={`cursor-pointer flex items-center justify-center w-full px-3 py-2 text-xs rounded-lg ${
-                                interests.includes(option.value)
-                                  ? 'bg-[#1a1a1a] text-[#9cadce] border-2 border-[#9cadce]'
-                                  : 'border border-gray-600 text-gray-300 hover:border-[#9cadce]'
-                              }`}
-                            >
-                              {option.label}
-                            </label>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex justify-center">
-                      <motion.button
-                        type="submit"
-                        disabled={loading || !source || !destination}
-                        className={`w-full py-3 px-6 flex items-center justify-center rounded-md shadow-sm font-medium ${
-                          loading || !source || !destination
-                            ? 'bg-gray-600 cursor-not-allowed text-gray-300'
-                            : 'bg-[#9cadce] hover:bg-opacity-80 text-black'
-                        }`}
-                        whileHover={!loading && source && destination ? { scale: 1.02 } : {}}
-                        whileTap={!loading && source && destination ? { scale: 0.98 } : {}}
-                      >
-                        {loading ? (
-                          <>
-                            <FaSpinner className="animate-spin mr-2" /> Generating Itinerary...
-                          </>
-                        ) : (
-                          'Create Travel Plan'
-                        )}
-                      </motion.button>
-                    </div>
-
-                    {error && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mt-4 p-3 bg-red-900 bg-opacity-30 text-red-400 rounded-lg border border-red-700"
-                      >
-                        <p className="flex items-center">
-                          <FaInfoCircle className="mr-2" /> {error}
-                        </p>
-                      </motion.div>
-                    )}
-                  </form>
-                </div>
-
-                {/* Travel Tips and Info */}
-                <div>
-                  <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Travel Insights</h2>
-                  <motion.div
-                    className="p-6 rounded-xl"
-                    style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                    whileHover={{ boxShadow: '0 0 15px rgba(156, 173, 206, 0.3)' }}
-                  >
-                    <h3 className="text-lg font-medium mb-4" style={{ color: '#9cadce' }}>Tips for Amazing Trips</h3>
-                    <ul className="space-y-3">
-                      <motion.li
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.1 }}
-                      >
-                        <FaSuitcase className="mt-1 mr-3" style={{ color: '#9cadce' }} />
-                        <p className="text-gray-300">Pack light and smart. Check the weather forecast for your destination.</p>
-                      </motion.li>
-                      <motion.li
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                      >
-                        <FaUtensils className="mt-1 mr-3" style={{ color: '#9cadce' }} />
-                        <p className="text-gray-300">Research local cuisine and try regional specialties for an authentic experience.</p>
-                      </motion.li>
-                      <motion.li
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 }}
-                      >
-                        <FaUmbrellaBeach className="mt-1 mr-3" style={{ color: '#9cadce' }} />
-                        <p className="text-gray-300">Balance planned activities with free time for spontaneous exploration.</p>
-                      </motion.li>
-                      <motion.li
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.4 }}
-                      >
-                        <FaClock className="mt-1 mr-3" style={{ color: '#9cadce' }} />
-                        <p className="text-gray-300">Adjust to the local time zone quickly by staying awake until the local night time.</p>
-                      </motion.li>
-                      <motion.li
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.5 }}
-                      >
-                        <FaSun className="mt-1 mr-3" style={{ color: '#9cadce' }} />
-                        <p className="text-gray-300">Protect yourself from the sun with sunscreen, even on cloudy days at popular destinations.</p>
-                      </motion.li>
-                    </ul>
-                  </motion.div>
-                </div>
-              </div>
-            )}
-
-            {/* Map View Tab */}
-            {currentTab === 'map' && hasGeneratedItinerary && (
-              <div ref={mapSectionRef}>
-                <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Your Journey Map</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="md:col-span-2">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5 }}
-                      ref={mapContainer}
-                      className="h-96 md:h-[500px] w-full rounded-lg border border-[#9cadce] shadow-lg overflow-hidden"
-                      style={{ boxShadow: '0 0 20px rgba(156, 173, 206, 0.2)' }}
-                    ></motion.div>
-                  </div>
+            {/* Trip Form */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Plan Your Adventure</h2>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
+                    <label htmlFor="source" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
+                      Starting From
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaMapMarkerAlt style={{ color: '#9cadce' }} />
+                      </div>
+                      <input
+                        type="text"
+                        id="source"
+                        value={source}
+                        onChange={(e) => setSource(e.target.value)}
+                        className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
+                        style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                        placeholder="New York, Tokyo..."
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="destination" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
+                      Destination
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaMapMarkerAlt style={{ color: '#9cadce' }} />
+                      </div>
+                      <input
+                        type="text"
+                        id="destination"
+                        value={destination}
+                        onChange={(e) => setDestination(e.target.value)}
+                        className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
+                        style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                        placeholder="Paris, Bangkok..."
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="days" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
+                      Trip Duration (Days)
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaCalendarAlt style={{ color: '#9cadce' }} />
+                      </div>
+                      <input
+                        type="number"
+                        id="days"
+                        min="1"
+                        max="30"
+                        value={days}
+                        onChange={(e) => setDays(parseInt(e.target.value))}
+                        className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
+                        style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="travelers" className="block text-sm font-medium" style={{ color: '#9cadce' }}>
+                      Number of Travelers
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FaUser style={{ color: '#9cadce' }} />
+                      </div>
+                      <input
+                        type="number"
+                        id="travelers"
+                        min="1"
+                        max="20"
+                        value={travelers}
+                        onChange={(e) => setTravelers(parseInt(e.target.value))}
+                        className="block w-full pl-10 pr-4 py-3 sm:text-sm rounded-lg text-white"
+                        style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#9cadce' }}>Budget Level</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                      <input
+                        type="radio"
+                        id="budget-low"
+                        name="budget"
+                        className="sr-only"
+                        checked={budget === 'low'}
+                        onChange={() => setBudget('low')}
+                      />
+                      <label
+                        htmlFor="budget-low"
+                        className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
+                          budget === 'low'
+                            ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
+                            : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">Economy</span>
+                        <span className="block text-xs mt-1">$ Budget-friendly</span>
+                      </label>
+                    </motion.div>
+
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                      <input
+                        type="radio"
+                        id="budget-medium"
+                        name="budget"
+                        className="sr-only"
+                        checked={budget === 'medium'}
+                        onChange={() => setBudget('medium')}
+                      />
+                      <label
+                        htmlFor="budget-medium"
+                        className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
+                          budget === 'medium'
+                          ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
+                            : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">Standard</span>
+                        <span className="block text-xs mt-1">$$ Mid-range</span>
+                      </label>
+                    </motion.div>
+
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                      <input
+                        type="radio"
+                        id="budget-high"
+                        name="budget"
+                        className="sr-only"
+                        checked={budget === 'high'}
+                        onChange={() => setBudget('high')}
+                      />
+                      <label
+                        htmlFor="budget-high"
+                        className={`cursor-pointer flex flex-col items-center justify-center w-full p-3 rounded-lg ${
+                          budget === 'high'
+                            ? 'bg-[#1a1a1a] border-2 border-[#9cadce] text-[#9cadce]'
+                            : 'border border-gray-600 hover:border-[#9cadce] text-gray-300'
+                        }`}
+                      >
+                        <span className="block text-sm font-medium">Luxury</span>
+                        <span className="block text-xs mt-1">$$$ Premium</span>
+                      </label>
+                    </motion.div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#9cadce' }}>Travel Interests</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {interestOptions.map((option) => (
+                      <motion.div key={option.value} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.98 }}>
+                        <input
+                          type="checkbox"
+                          id={`interest-${option.value}`}
+                          className="sr-only"
+                          checked={interests.includes(option.value)}
+                          onChange={() => toggleInterest(option.value)}
+                        />
+                        <label
+                          htmlFor={`interest-${option.value}`}
+                          className={`cursor-pointer flex items-center justify-center w-full px-3 py-2 text-xs rounded-lg ${
+                            interests.includes(option.value)
+                              ? 'bg-[#1a1a1a] text-[#9cadce] border-2 border-[#9cadce]'
+                              : 'border border-gray-600 text-gray-300 hover:border-[#9cadce]'
+                          }`}
+                        >
+                          {option.label}
+                        </label>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-center">
+                  <motion.button
+                    type="submit"
+                    disabled={loading || !source || !destination}
+                    className={`w-full py-3 px-6 flex items-center justify-center rounded-md shadow-sm font-medium ${
+                      loading || !source || !destination
+                        ? 'bg-gray-600 cursor-not-allowed text-gray-300'
+                        : 'bg-[#9cadce] hover:bg-opacity-80 text-black'
+                    }`}
+                    whileHover={!loading && source && destination ? { scale: 1.02 } : {}}
+                    whileTap={!loading && source && destination ? { scale: 0.98 } : {}}
+                  >
+                    {loading ? (
+                      <>
+                        <FaSpinner className="animate-spin mr-2" /> Generating Itinerary...
+                      </>
+                    ) : (
+                      'Create Travel Plan'
+                    )}
+                  </motion.button>
+                </div>
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-4 p-3 bg-red-900 bg-opacity-30 text-red-400 rounded-lg border border-red-700"
+                  >
+                    <p className="flex items-center">
+                      <FaInfoCircle className="mr-2" /> {error}
+                    </p>
+                  </motion.div>
+                )}
+              </form>
+            </div>
+
+            {/* Travel Tips and Info */}
+            <div className="mt-8">
+              <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Travel Insights</h2>
+              <motion.div
+                className="p-6 rounded-xl"
+                style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                whileHover={{ boxShadow: '0 0 15px rgba(156, 173, 206, 0.3)' }}
+              >
+                <h3 className="text-lg font-medium mb-4" style={{ color: '#9cadce' }}>Tips for Amazing Trips</h3>
+                <ul className="space-y-3">
+                  <motion.li
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 }}
+                  >
+                    <FaSuitcase className="mt-1 mr-3" style={{ color: '#9cadce' }} />
+                    <p className="text-gray-300">Pack light and smart. Check the weather forecast for your destination.</p>
+                  </motion.li>
+                  <motion.li
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <FaUtensils className="mt-1 mr-3" style={{ color: '#9cadce' }} />
+                    <p className="text-gray-300">Research local cuisine and try regional specialties for an authentic experience.</p>
+                  </motion.li>
+                  <motion.li
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                  >
+                    <FaUmbrellaBeach className="mt-1 mr-3" style={{ color: '#9cadce' }} />
+                    <p className="text-gray-300">Balance planned activities with free time for spontaneous exploration.</p>
+                  </motion.li>
+                  <motion.li
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4 }}
+                  >
+                    <FaClock className="mt-1 mr-3" style={{ color: '#9cadce' }} />
+                    <p className="text-gray-300">Adjust to the local time zone quickly by staying awake until the local night time.</p>
+                  </motion.li>
+                  <motion.li
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                  >
+                    <FaSun className="mt-1 mr-3" style={{ color: '#9cadce' }} />
+                    <p className="text-gray-300">Protect yourself from the sun with sunscreen, even on cloudy days at popular destinations.</p>
+                  </motion.li>
+                </ul>
+              </motion.div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Map View Section */}
+        {hasGeneratedItinerary && (
+          <div ref={mapSectionRef} className="mb-8">
+            <h2 className="text-xl font-semibold mb-4" style={{ color: '#ffffff' }}>Your Journey Map</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <motion.div
+                  key="map"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.5 }}
+                  ref={mapContainer}
+                  className="h-96 md:h-[500px] w-full rounded-lg border border-[#9cadce] shadow-lg overflow-hidden"
+                  style={{ boxShadow: '0 0 20px rgba(156, 173, 206, 0.2)' }}
+                ></motion.div>
+              </div>
+              <div>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.2 }}
+                  className="rounded-lg shadow-md p-4 mb-6"
+                  style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                >
+                  <h3 className="text-lg font-medium mb-4" style={{ color: '#9cadce' }}>Trip Overview</h3>
+                  <div className="space-y-4">
                     <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                      className="rounded-lg shadow-md p-4 mb-6"
-                      style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                      whileHover={{ x: 5 }}
+                      transition={{ type: "spring", stiffness: 300 }}
                     >
-                      <h3 className="text-lg font-medium mb-4" style={{ color: '#9cadce' }}>Trip Overview</h3>
-                      <div className="space-y-4">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                          <FaPlane className="text-black text-sm" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white">From: {source}</p>
+                          <p className="text-sm font-medium text-white">To: {destination}</p>
+                        </div>
+                      </div>
+                    </motion.div>
+
+                    {itinerary && (
+                      <>
                         <motion.div
                           whileHover={{ x: 5 }}
                           transition={{ type: "spring", stiffness: 300 }}
                         >
                           <div className="flex items-center">
                             <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                              <FaPlane className="text-black text-sm" />
+                              <FaClock className="text-black text-sm" />
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-white">From: {source}</p>
-                              <p className="text-sm font-medium text-white">To: {destination}</p>
+                              <p className="text-sm text-gray-400">Flight Duration</p>
+                              <p className="text-sm font-medium text-white">{itinerary.flightTime} hours</p>
                             </div>
                           </div>
                         </motion.div>
 
-                        {itinerary && (
-                          <>
-                            <motion.div
-                              whileHover={{ x: 5 }}
-                              transition={{ type: "spring", stiffness: 300 }}
-                            >
-                              <div className="flex items-center">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                                  <FaClock className="text-black text-sm" />
-                                </div>
-                                <div>
-                                  <p className="text-sm text-gray-400">Flight Duration</p>
-                                  <p className="text-sm font-medium text-white">{itinerary.flightTime} hours</p>
-                                </div>
-                              </div>
-                            </motion.div>
-
-                            <motion.div
-                              whileHover={{ x: 5 }}
-                              transition={{ type: "spring", stiffness: 300 }}
-                            >
-                              <div className="flex items-center">
-                                <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                                  <FaMapMarkerAlt className="text-black text-sm" />
-                                </div>
-                                <div>
-                                  <p className="text-sm text-gray-400">Distance</p>
-                                  <p className="text-sm font-medium text-white">{itinerary.distance} kilometers</p>
-                                </div>
-                              </div>
-                            </motion.div>
-                          </>
-                        )}
-
-                        {weatherInfo && (
-                          <motion.div
-                            whileHover={{ x: 5 }}
-                            transition={{ type: "spring", stiffness: 300 }}
-                          >
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                                {getWeatherIcon(weatherInfo.condition)}
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-400">Weather in {destination}</p>
-                                <p className="text-sm font-medium text-white">
-                                  {weatherInfo.condition}, {weatherInfo.temperature}°C
-                                </p>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-
-                        {currency && (
-                          <motion.div
-                            whileHover={{ x: 5 }}
-                            transition={{ type: "spring", stiffness: 300 }}
-                          >
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                                <span className="text-black font-bold">{currency.symbol}</span>
-                              </div>
-                              <div>
-                                <p className="text-sm text-gray-400">Local Currency</p>
-                                <p className="text-sm font-medium text-white">
-                                  {currency.name} ({currency.code})
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  1 USD = {currency.exchangeRate} {currency.code}
-                                </p>
-                              </div>
-                            </div>
-                          </motion.div>
-                        )}
-                      </div>
-                    </motion.div>
-
-                    <motion.button
-                      onClick={() => setCurrentTab('itinerary')}
-                      className="w-full py-3 px-4 flex items-center justify-center rounded-md shadow-sm font-medium text-black"
-                      style={{ backgroundColor: '#9cadce' }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      disabled={!itinerary}
-                    >
-                      <FaArrowRight className="mr-2" /> View Detailed Itinerary
-                    </motion.button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Itinerary Tab */}
-            {currentTab === 'itinerary' && itinerary && (
-              <div ref={itineraryRef}>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.5 }}
-                  className="flex items-center justify-between mb-6"
-                >
-                  <h2 className="text-2xl font-bold" style={{ color: '#ffffff' }}>
-                    {source} to {destination} Itinerary
-                  </h2>
-                  <div className="flex space-x-2">
-                    <motion.button
-                      onClick={downloadItinerary}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-black"
-                      style={{ backgroundColor: '#9cadce' }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <FaDownload className="mr-2" /> Download
-                    </motion.button>
-                    <motion.button
-                      onClick={shareItinerary}
-                      className="inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm"
-                      style={{ borderColor: '#9cadce', color: '#9cadce' }}
-                      whileHover={{ scale: 1.05, backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <FaShare className="mr-2" /> Share
-                    </motion.button>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.2 }}
-                  className="p-4 rounded-lg mb-6"
-                  style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                >
-                  <div className="flex flex-wrap items-center justify-center md:justify-between gap-4">
-                    <motion.div
-                      className="flex items-center"
-                      whileHover={{ scale: 1.05 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                        <FaCalendarAlt className="text-black" />
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: '#9cadce' }}>Duration</p>
-                        <p className="text-sm font-bold text-white">{days} Days</p>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      className="flex items-center"
-                      whileHover={{ scale: 1.05 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                        <FaUser className="text-black" />
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: '#9cadce' }}>Travelers</p>
-                        <p className="text-sm font-bold text-white">{travelers} Persons</p>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      className="flex items-center"
-                      whileHover={{ scale: 1.05 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                        <FaClock className="text-black" />
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: '#9cadce' }}>Flight Time</p>
-                        <p className="text-sm font-bold text-white">{itinerary.flightTime} Hours</p>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      className="flex items-center"
-                      whileHover={{ scale: 1.05 }}
-                      transition={{ type: "spring", stiffness: 300 }}
-                    >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
-                        <FaMapMarkerAlt className="text-black" />
-                      </div>
-                      <div>
-                        <p className="text-xs" style={{ color: '#9cadce' }}>Distance</p>
-                        <p className="text-sm font-bold text-white">{itinerary.distance} km</p>
-                      </div>
-                    </motion.div>
-                  </div>
-                </motion.div>
-
-                {/* Day-by-day itinerary */}
-                <div className="space-y-8 mb-8">
-                  {itinerary.days.map((day, index) => (
-                    <motion.div
-                      key={index}
-                      className="rounded-lg shadow-md overflow-hidden"
-                      style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: 0.1 * index }}
-                      whileHover={{ boxShadow: '0 0 15px rgba(156, 173, 206, 0.2)' }}
-                    >
-                      <div className="px-4 py-3" style={{ backgroundColor: '#9cadce' }}>
-                        <h3 className="font-semibold text-black">Day {day.day}</h3>
-                      </div>
-                      <div className="p-4">
-                        <h4 className="font-medium text-[#9cadce] mb-3">Activities</h4>
-                        <ul className="space-y-3 mb-4">
-                          {day.activities.map((activity, i) => (
-                            <motion.li
-                              key={i}
-                              className="flex items-start"
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: 0.2 + (i * 0.1) }}
-                              whileHover={{ x: 5 }}
-                            >
-                              <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium mr-3" style={{ backgroundColor: '#9cadce', color: 'black' }}>
-                                {i + 1}
-                              </span>
-                              <span className="text-gray-300">{activity}</span>
-                            </motion.li>
-                          ))}
-                        </ul>
-
-                        <h4 className="font-medium text-[#9cadce] mb-2">Accommodation</h4>
                         <motion.div
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: '#111111' }}
-                          whileHover={{ backgroundColor: '#1e1e1e' }}
+                          whileHover={{ x: 5 }}
+                          transition={{ type: "spring", stiffness: 300 }}
                         >
-                          <p className="font-medium text-[#9cadce]">{day.accommodation.name}</p>
-                          <p className="text-sm text-gray-400">{day.accommodation.description}</p>
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                              <FaMapMarkerAlt className="text-black text-sm" />
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-400">Distance</p>
+                              <p className="text-sm font-medium text-white">{itinerary.distance} kilometers</p>
+                            </div>
+                          </div>
                         </motion.div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                      </>
+                    )}
 
-                {/* Travel Tips */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5, delay: 0.5 }}
-                  className="rounded-lg p-4 mb-6"
-                  style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
-                >
-                  <h3 className="font-semibold mb-3" style={{ color: '#9cadce' }}>Travel Tips for {destination}</h3>
-                  <ul className="space-y-2">
-                    {itinerary.travelTips.map((tip, index) => (
-                      <motion.li
-                        key={index}
-                        className="flex items-start"
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.6 + (index * 0.1) }}
+                    {weatherInfo && (
+                      <motion.div
                         whileHover={{ x: 5 }}
+                        transition={{ type: "spring", stiffness: 300 }}
                       >
-                        <FaInfoCircle className="text-[#9cadce] mt-1 mr-2 flex-shrink-0" />
-                        <span className="text-gray-300">{tip}</span>
-                      </motion.li>
-                    ))}
-                  </ul>
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                            {getWeatherIcon(weatherInfo.condition)}
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400">Weather in {destination}</p>
+                            <p className="text-sm font-medium text-white">
+                              {weatherInfo.condition}, {weatherInfo.temperature}°C
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {currency && (
+                      <motion.div
+                        whileHover={{ x: 5 }}
+                        transition={{ type: "spring", stiffness: 300 }}
+                      >
+                        <div className="flex items-center">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                            <span className="text-black font-bold">{currency.symbol}</span>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-400">Local Currency</p>
+                            <p className="text-sm font-medium text-white">
+                              {currency.name} ({currency.code})
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              1 USD = {currency.exchangeRate} {currency.code}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+
+                <motion.button
+                  onClick={scrollToItinerary}
+                  className="w-full py-3 px-4 flex items-center justify-center rounded-md shadow-sm font-medium text-black"
+                  style={{ backgroundColor: '#9cadce' }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  disabled={!itinerary}
+                >
+                  <FaArrowRight className="mr-2" /> View Detailed Itinerary
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Itinerary Section */}
+        {itinerary && (
+          <div ref={itineraryRef} className="mb-8">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-center justify-between mb-6"
+            >
+              <h2 className="text-2xl font-bold" style={{ color: '#ffffff' }}>
+                {source} to {destination} Itinerary
+              </h2>
+              <div className="flex space-x-2">
+                <motion.button
+                  onClick={downloadItinerary}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-black"
+                  style={{ backgroundColor: '#9cadce' }}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <FaDownload className="mr-2" /> Download
+                </motion.button>
+                <motion.button
+                  onClick={shareItinerary}
+                  className="inline-flex items-center px-4 py-2 border text-sm font-medium rounded-md shadow-sm"
+                  style={{ borderColor: '#9cadce', color: '#9cadce' }}
+                  whileHover={{ scale: 1.05, backgroundColor: 'rgba(156, 173, 206, 0.1)' }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <FaShare className="mr-2" /> Share
+                </motion.button>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="p-4 rounded-lg mb-6"
+              style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+            >
+              <div className="flex flex-wrap items-center justify-center md:justify-between gap-4">
+                <motion.div
+                  className="flex items-center"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                    <FaCalendarAlt className="text-black" />
+                  </div>
+                  <div>
+                    <p className="text-xs" style={{ color: '#9cadce' }}>Duration</p>
+                    <p className="text-sm font-bold text-white">{days} Days</p>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className="flex items-center"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                    <FaUser className="text-black" />
+                  </div>
+                  <div>
+                    <p className="text-xs" style={{ color: '#9cadce' }}>Travelers</p>
+                    <p className="text-sm font-bold text-white">{travelers} Persons</p>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className="flex items-center"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                    <FaClock className="text-black" />
+                  </div>
+                  <div>
+                    <p className="text-xs" style={{ color: '#9cadce' }}>Flight Time</p>
+                    <p className="text-sm font-bold text-white">{itinerary.flightTime} Hours</p>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  className="flex items-center"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center mr-3" style={{ backgroundColor: '#9cadce' }}>
+                    <FaMapMarkerAlt className="text-black" />
+                  </div>
+                  <div>
+                    <p className="text-xs" style={{ color: '#9cadce' }}>Distance</p>
+                    <p className="text-sm font-bold text-white">{itinerary.distance} km</p>
+                  </div>
                 </motion.div>
               </div>
-            )}
+            </motion.div>
 
-            {/* Weather Tab */}
-            {currentTab === 'weather' && source && destination && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                <WeatherFind location={destination} />
-              </motion.div>
-            )}
+            {/* Day-by-day itinerary */}
+            <div className="space-y-8 mb-8">
+              {itinerary.days.map((day, index) => (
+                <motion.div
+                  key={index}
+                  className="rounded-lg shadow-md overflow-hidden"
+                  style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.1 * index }}
+                  whileHover={{ boxShadow: '0 0 15px rgba(156, 173, 206, 0.2)' }}
+                >
+                  <div className="px-4 py-3" style={{ backgroundColor: '#9cadce' }}>
+                    <h3 className="font-semibold text-black">Day {day.day}</h3>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="font-medium text-[#9cadce] mb-3">Activities</h4>
+                    <ul className="space-y-3 mb-4">
+                      {day.activities.map((activity, i) => (
+                        <motion.li
+                          key={i}
+                          className="flex items-start"
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.2 + (i * 0.1) }}
+                          whileHover={{ x: 5 }}
+                        >
+                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full text-xs font-medium mr-3" style={{ backgroundColor: '#9cadce', color: 'black' }}>
+                            {i + 1}
+                          </span>
+                          <span className="text-gray-300">{activity}</span>
+                        </motion.li>
+                      ))}
+                    </ul>
 
-            {/* Currency Tab */}
-            {currentTab === 'currency' && source && destination && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5 }}
-              >
-                <CurrencyConverter source={source} destination={destination} />
-              </motion.div>
-            )}
+                    <h4 className="font-medium text-[#9cadce] mb-2">Accommodation</h4>
+                    <motion.div
+                      className="rounded-lg p-3"
+                      style={{ backgroundColor: '#111111' }}
+                      whileHover={{ backgroundColor: '#1e1e1e' }}
+                    >
+                      <p className="font-medium text-[#9cadce]">{day.accommodation.name}</p>
+                      <p className="text-sm text-gray-400">{day.accommodation.description}</p>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Travel Tips */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.5 }}
+              className="rounded-lg p-4 mb-6"
+              style={{ backgroundColor: '#1a1a1a', borderColor: '#9cadce', borderWidth: '1px' }}
+            >
+              <h3 className="font-semibold mb-3" style={{ color: '#9cadce' }}>Travel Tips for {destination}</h3>
+              <ul className="space-y-2">
+                {itinerary.travelTips.map((tip, index) => (
+                  <motion.li
+                    key={index}
+                    className="flex items-start"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 + (index * 0.1) }}
+                    whileHover={{ x: 5 }}
+                  >
+                    <FaInfoCircle className="text-[#9cadce] mt-1 mr-2 flex-shrink-0" />
+                    <span className="text-gray-300">{tip}</span>
+                  </motion.li>
+                ))}
+              </ul>
+            </motion.div>
           </div>
-        </motion.div>
+        )}
 
-        {/* Hidden sections that don't need to be visible but should still exist for functionality */}
-        <div style={{ display: 'none' }} ref={mapSectionRef}></div>
-        <div style={{ display: 'none' }} ref={itineraryRef}></div>
+        {/* Weather Section */}
+        {source && destination && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+            className="mb-8"
+          >
+            <WeatherFind location={destination} />
+          </motion.div>
+        )}
+
+        {/* Currency Section */}
+        {source && destination && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <CurrencyConverter source={source} destination={destination} />
+          </motion.div>
+        )}
       </div>
     </div>
   );
