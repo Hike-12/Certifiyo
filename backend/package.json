@@ -12,7 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@google/genai": "^0.14.1",
+    "@google/genai": "^0.15.0",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
