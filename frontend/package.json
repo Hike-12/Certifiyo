@@ -28,7 +28,7 @@
     "jspdf": "^3.0.1",
     "leaflet": "^1.9.4",
     "leaflet-rotatedmarker": "^0.2.0",
-    "lodash": "^4.17.21",
+    "lodash": "^4.17.23",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.511.0",
     "marked": "^15.0.11",
