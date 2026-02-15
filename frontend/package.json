@@ -18,7 +18,7 @@
     "@splinetool/react-spline": "^4.0.0",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/vite": "^4.1.7",
-    "axios": "^1.9.0",
+    "axios": "^1.13.5",
     "canvas-confetti": "^1.9.3",
     "clsx": "^2.1.1",
     "dotenv": "^16.5.0",
